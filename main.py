@@ -4,7 +4,12 @@ import numpy as np
 from cvzone.HandTrackingModule import HandDetector
 
 # Variables
-screenWidth, screenHeight = 1280, 720
+# screenWidth, screenHeight = 1280, 720
+cv2.namedWindow("Slides", cv2.WINDOW_NORMAL)
+cv2.setWindowProperty("Slides", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+(x, y, screenWidth, screenHeight) = cv2.getWindowImageRect("Slides") 
+screenWidth -= 150
+screenHeight -= 150
 folderPath = "Presentation"
 imgNumber = 0
 cameraHeight, cameraWidth = int(120 * 1.2), int(213 * 1.2)
@@ -15,6 +20,9 @@ buttonDelay = 15
 annotations = [[]]
 annotationNumber = 0
 annotationStart = False
+zoomFactor = 1.0
+minZoom = 1.0
+maxZoom = 4.0
 
 # Gestures
 leftSide = [1, 0, 0, 0, 0]
@@ -22,6 +30,8 @@ rightSide = [0, 0, 0, 0, 1]
 pointerSide = [0, 1, 1, 0, 0]
 drawSide = [0, 1, 0, 0, 0]
 undoSide = [0, 1, 1, 1, 0]
+zoominSide = [0, 1, 0, 0, 1]
+zoomoutSide = [0, 1, 1, 1, 1]
 
 # Hand Detector
 detector = HandDetector(detectionCon=0.5, maxHands=1)
@@ -51,7 +61,15 @@ while True:
     camera = cv2.flip(camera, 1)
     pathFullImage = os.path.join(folderPath, pathImages[imgNumber])
     imgCurrent = cv2.imread(pathFullImage)
-    imgCurrent = cv2.resize(imgCurrent, (screenWidth, screenHeight)) 
+
+    # Apply zoom
+    newWidth, newHeight = int(screenWidth*zoomFactor), int(screenHeight*zoomFactor)
+    imgCurrent = cv2.resize(imgCurrent, (newWidth, newHeight), interpolation=cv2.INTER_AREA)
+
+    # Center zoomed image
+    xOffset = (newWidth-screenWidth)//2
+    yOffset = (newHeight-screenHeight)//2
+    imgCurrent = imgCurrent[yOffset:yOffset+screenHeight, xOffset:xOffset+screenWidth]
 
     # Gesture handling
     hands, camera = detector.findHands(camera)
@@ -61,12 +79,11 @@ while True:
         hand = hands[0]
         fingers = detector.fingersUp(hand)
         cx, cy = hand["center"]
-        # print(fingers)
 
         #Index finger landmarks
         landmarks = hand['lmList']
         xIndex = int(np.interp(landmarks[8][0], [screenWidth//2, w], [0, screenWidth]))
-        yIndex = int(np.interp(landmarks[8][1], [150, screenHeight-150], [0, screenHeight]))
+        yIndex = int(np.interp(landmarks[8][1], [50, screenHeight-50], [0, screenHeight]))
         indexFinger = xIndex, yIndex
 
         if cy <= gestureThresholdHeight: #Hand on top right quarter
@@ -107,6 +124,18 @@ while True:
             if annotationNumber > 0:
                 annotationNumber -= 1
                 annotations.pop(-1)
+                buttonPressed = True
+        
+        # Gesture 6 - Zoom In
+        if fingers == zoominSide:
+            if zoomFactor < maxZoom:
+                zoomFactor += 0.25
+                buttonPressed = True
+
+        # Gesture 7 - Zoom Out
+        if fingers == zoomoutSide:
+            if zoomFactor > minZoom:
+                zoomFactor -= 0.25
                 buttonPressed = True
 
 
